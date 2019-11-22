@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   snprintf(command, PATH_MAX*2+20, "java ImgIntoMatrix %s %s", argv[1], argv[2]);
   system(command);
 
-  snprintf(command, PATH_MAX*2*2, "./mipro %s/original.txt %s/toFind.txt %s %s", cwd, argv[3], cwd, argv[4]);
+  snprintf(command, PATH_MAX*2*2, "./mipro %s/original.txt %s/toFind.txt %s %s", cwd, cwd, argv[3], argv[4]);
   system(command);
 
   return 0;
