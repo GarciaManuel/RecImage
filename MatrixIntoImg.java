@@ -2,61 +2,140 @@
 import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.awt.image.WritableRaster;
-import java.io.*;
-import java.util.Arrays;
-import java.util.Scanner;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
-public class MatrixIntoImg {
+public class ImgIntoMatrix extends RecursiveAction {
 
     // Variables to handle the indexes and the image for the iteration of recursive action
-    private static int[][] matrixImg;
+    private BufferedImage img;
+    private int[][] pix;
+    private int colStart;
+    private int rowEnd;
+    private int colEnd;
+    private static int sThreshold = 500;
 
-    public static void main(String args[]) throws IOException {
-
-        if(args.length != 2){
-            System.out.println("MatrixIntoImg usage: pathToMatrix outPutFileName");
-            return;
-        }
-        readMatrix(args[0]);
-        intToImg(args[1]);
+    // Constructor, assigning initial values to variables
+    private ImgIntoMatrix(int cs, int ce, int re, BufferedImage img, int[][] pix) {
+        colStart = cs;
+        colEnd = ce;
+        rowEnd = re;
+        this.pix = pix;
+        this.img = img;
     }
 
-    private static void intToImg(String path){
-        int[][] pxls = matrixImg;
-
-        BufferedImage image = new BufferedImage(pxls[0].length, pxls.length, BufferedImage.TYPE_INT_ARGB);
-        for(int i=0; i < pxls.length; i++) {
-            for(int j=0; j < pxls[0].length; j++) {
-                image.setRGB(j, i, pxls[i][j]);
-            }
-        }
-
-        try{
-            File f = null;
-            f = new File("./" + path + ".jpg");
-            ImageIO.write(image, "png", f);
-        } catch (IOException x){x.printStackTrace();}
-    }
-
-    private static void readMatrix(String path) throws FileNotFoundException {
-        Scanner sc = new Scanner(new BufferedReader(new FileReader(path)));
-
-        String[] firstLine = sc.nextLine().trim().split(",");
-
-        int rows = Integer.parseInt(firstLine[0]);
-        int columns = Integer.parseInt(firstLine[1]);
-        int [][] myArray = new int[rows][columns];
-        while(sc.hasNextLine()) {
-            for (int i=0; i < myArray.length; i++) {
-                String[] line = sc.nextLine().trim().split(",");
-                for (int j=0; j<line.length; j++) {
-                    myArray[i][j] = Integer.parseInt(line[j]);
+    // Code to apply the extraction of int value to each pixel
+    private void computeDirectly(){
+        for (int i = 0; i < rowEnd; i++) {
+            for (int j = colStart; j < colEnd; j++) {
+                try {
+                    // Function that gets the value
+                    pix[i][j] = img.getRGB(j , i);
+                } catch (ArrayIndexOutOfBoundsException ae){
+                    System.out.println(ae);
                 }
             }
         }
-        matrixImg = myArray;
+    }
+
+    // Method called each time a thread is created under Recursive Action.
+    // Checks if the image is small enough to compute or if its necessary to
+    // divide it more.
+    @Override
+    protected void compute() {
+        if ((colEnd - colStart) < sThreshold) {
+            computeDirectly();
+            return;
+        }
+
+        int split = (colEnd + colStart) >> 1;
+        //Create two new threads to help with the compute
+        invokeAll(new ImgIntoMatrix(colStart, split, rowEnd, img, pix),
+                new ImgIntoMatrix(split, colEnd, rowEnd, img, pix));
+    }
+
+    // Main method to validates the inputs, parallels to get matrix and print it
+    public static void main(String args[]) throws IOException {
+
+        if(args.length < 2){
+            System.out.println("ImgIntoMatrix usage: pathToOriginalImage pathToImageToFind/-c");
+            return;
+        }
+
+        try{
+            String fileName = "original";
+
+            if(args[1].equals("-c")) fileName = "imgToCompress";
+
+            BufferedImage img = ImageIO.read(new File(args[0]));
+            parallelMatrix(img, fileName);
+
+            if(!args[1].equals("-c")){
+                BufferedImage imgToFind = ImageIO.read(new File(args[1]));
+                parallelMatrix(imgToFind, "toFind");
+            }
+        } catch (IIOException io){
+            System.out.println("Error: ImgIntoMatrix - Can't read input file");
+        }
+    }
+
+    private static void parallelMatrix(BufferedImage srcImg, String outputName)  {
+        int w = srcImg.getWidth();
+        int h = srcImg.getHeight();
+
+        int[][] pix = new int[h][w];
+
+        ImgIntoMatrix im = new ImgIntoMatrix(0, w, h, srcImg, pix);
+        ForkJoinPool pool = new ForkJoinPool();
+
+        System.out.println("\nConcurrent image into matrix conversion");
+        long startTime = System.currentTimeMillis();
+        pool.invoke(im);
+        long endTime = System.currentTimeMillis();
+        System.out.println("Concurrent image into matrix took " + (endTime - startTime) + " milliseconds.");
+        pool.shutdown();
+
+        writeMatrix(pix, outputName);
+    }
+
+    private static void sequentialMatrix(BufferedImage srcImg)  {
+
+        System.out.println("SEQUENTIAL \n Starting sequential image into matrix");
+        long startTime = System.currentTimeMillis();
+        int width = srcImg.getWidth(null);
+        int height = srcImg.getHeight(null);
+        int[][] pixels = new int[width][height];
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                pixels[i][j] = srcImg.getRGB(i, j);
+            }
+        }
+
+        long endTime = System.currentTimeMillis();
+        System.out.println("Sequential image into matrix took " + (endTime - startTime) + " milliseconds.\n");
+
+        writeMatrix(pixels, "seq");
+    }
+
+    private static void writeMatrix(int[][] matrix, String name) {
+        try {
+            BufferedWriter bw = new BufferedWriter(new FileWriter("./" + name + ".txt"));
+
+            bw.write(matrix.length + "," + matrix[0].length);
+            bw.newLine();
+
+            for (int i = 0; i < matrix.length; i++) {
+                for (int j = 0; j < matrix[i].length; j++) {
+                    bw.write(matrix[i][j] + ((j == matrix[i].length-1) ? "" : ","));
+                }
+                bw.write(",");
+                bw.newLine();
+            }
+            bw.flush();
+        } catch (IOException ignored) {}
     }
 }

@@ -1,4 +1,3 @@
-
 import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -28,10 +27,12 @@ public class ImgIntoMatrix extends RecursiveAction {
         this.img = img;
     }
 
+    // Code to apply the extraction of int value to each pixel
     private void computeDirectly(){
         for (int i = 0; i < rowEnd; i++) {
             for (int j = colStart; j < colEnd; j++) {
                 try {
+                    // Function that gets the value
                     pix[i][j] = img.getRGB(j , i);
                 } catch (ArrayIndexOutOfBoundsException ae){
                     System.out.println(ae);
@@ -40,6 +41,9 @@ public class ImgIntoMatrix extends RecursiveAction {
         }
     }
 
+    // Method called each time a thread is created under Recursive Action.
+    // Checks if the image is small enough to compute or if its necessary to
+    // divide it more.
     @Override
     protected void compute() {
         if ((colEnd - colStart) < sThreshold) {
@@ -48,10 +52,12 @@ public class ImgIntoMatrix extends RecursiveAction {
         }
 
         int split = (colEnd + colStart) >> 1;
+        //Create two new threads to help with the compute
         invokeAll(new ImgIntoMatrix(colStart, split, rowEnd, img, pix),
                 new ImgIntoMatrix(split, colEnd, rowEnd, img, pix));
     }
 
+    // Main method to validates the inputs, parallels to get matrix and print it
     public static void main(String args[]) throws IOException {
 
         if(args.length < 2){
@@ -85,11 +91,11 @@ public class ImgIntoMatrix extends RecursiveAction {
         ImgIntoMatrix im = new ImgIntoMatrix(0, w, h, srcImg, pix);
         ForkJoinPool pool = new ForkJoinPool();
 
-        System.out.println("\nParalleling image into matrix conversion");
+        System.out.println("\nConcurrent image into matrix conversion");
         long startTime = System.currentTimeMillis();
         pool.invoke(im);
         long endTime = System.currentTimeMillis();
-        System.out.println("Parallel image into matrix took " + (endTime - startTime) + " milliseconds.");
+        System.out.println("Concurrent image into matrix took " + (endTime - startTime) + " milliseconds.");
         pool.shutdown();
 
         writeMatrix(pix, outputName);
@@ -132,3 +138,4 @@ public class ImgIntoMatrix extends RecursiveAction {
         } catch (IOException ignored) {}
     }
 }
+
