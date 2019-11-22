@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <string.h>
+#include <unistd.h>
+#include <limits.h>
 
 int main(int argc, char* argv[]) {
 
@@ -20,12 +22,20 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "usage: %s Flag to print matrix should be 0 or 1\n", argv[0]);
     return -3;
   }
+  
+  char cwd[PATH_MAX];
+   if (getcwd(cwd, sizeof(cwd)) != NULL) {
+       printf("Current working dir: %s\n", cwd);
+   } else {
+       perror("getcwd() error");
+       return 1;
+   }
 
   char command [PATH_MAX * 2 + 20];
   snprintf(command, PATH_MAX*2+20, "java ImgIntoMatrix %s %s", argv[1], argv[2]);
   system(command);
 
-  snprintf(command, PATH_MAX*2*2, "./mipro /home/A01701414/RecImage/original.txt /home/A01701414/RecImage/toFind.txt %s %s", argv[3], argv[4]);
+  snprintf(command, PATH_MAX*2*2, "./mipro %s/original.txt %s/toFind.txt %s %s", cwd, argv[3], cwd, argv[4]);
   system(command);
 
   return 0;
